@@ -1,77 +1,742 @@
-# Customer Churn Workflow
+# Customer Churn Prediction — MLOps Workflow
 
-## End-to-End Flow
+## 1. Overview
+
+This project implements a Kubernetes-native machine learning workflow for **Customer Churn Prediction** using:
+
+* Kubernetes
+* Kubeflow Community Distribution
+* Kubeflow Pipelines
+* MLflow
+* PostgreSQL
+* MinIO
+* Python
+* Scikit-learn
+* Random Forest
+
+The objective is to demonstrate how a machine learning workflow can be organized into reproducible pipeline stages and connected with experiment tracking and artifact management.
+
+Kubeflow Pipelines represents an ML workflow as a directed graph of components. Pipeline tasks run as containers on Kubernetes, while inputs and outputs can be passed between components.
+
+---
+
+# 2. End-to-End Architecture
 
 ```text
+                         Customer Dataset
+                               |
+                               v
                     +----------------------+
-                    | Customer Churn Data  |
+                    |   Create Dataset     |
                     +----------+-----------+
                                |
                                v
                     +----------------------+
-                    | Dataset Validation   |
+                    |  Validate Dataset    |
                     +----------+-----------+
                                |
                                v
                     +----------------------+
-                    | Preprocessing        |
-                    | Encoding             |
-                    | Train/Test Split     |
+                    | Preprocess Dataset    |
                     +----------+-----------+
                                |
                                v
                     +----------------------+
-                    | RandomForest Training|
+                    |   Train Model         |
+                    | RandomForestClassifier|
                     +----------+-----------+
                                |
-                     +---------+---------+
-                     |                   |
-                     v                   v
-              +-------------+     +-------------+
-              | Evaluation  |     | MLflow      |
-              | Metrics     |     | Tracking    |
-              +-------------+     +------+------+
-                                         |
-                                  +------+------+
-                                  |             |
-                                  v             v
-                             PostgreSQL       MinIO
-                             Metadata        Artifacts
+                               v
+                    +----------------------+
+                    |   Evaluate Model      |
+                    +----------+-----------+
+                               |
+                               v
+                         +---------+
+                         | MLflow  |
+                         +----+----+
+                              |
+                 +------------+------------+
+                 |                         |
+                 v                         v
+          +-------------+           +-------------+
+          | PostgreSQL  |           |    MinIO    |
+          |  Metadata   |           |  Artifacts  |
+          +-------------+           +-------------+
 ```
 
-## Current Platform
+---
 
-Kubeflow Community Distribution 26.03.1 is used for Kubernetes-native pipeline orchestration.
+# 3. Pipeline Stages
 
-MLflow 3.16.1 is deployed separately in the `ml-registry` namespace.
+The current Kubeflow pipeline contains the following stages:
 
-The MLflow server uses:
+```text
+1. Create Dataset
+2. Validate Dataset
+3. Preprocess Data
+4. Train Model
+5. Evaluate Model
+```
 
-- PostgreSQL 15 for backend metadata
-- MinIO for artifact storage
-- boto3/botocore for S3-compatible artifact operations
-- psycopg2-binary for PostgreSQL connectivity
+---
 
-## Next Architecture
+# 4. Stage 1 — Create Dataset
+
+The first pipeline component creates the synthetic customer dataset.
+
+The dataset contains:
+
+```text
+customer_id
+age
+tenure
+monthly_charges
+total_charges
+contract_type
+support_calls
+churn
+```
+
+Example:
+
+| customer_id | age | tenure | monthly_charges | total_charges | contract_type  | support_calls | churn |
+| ----------- | --: | -----: | --------------: | ------------: | -------------- | ------------: | ----- |
+| C001        |  35 |     36 |              45 |          1620 | Long-term      |             1 | No    |
+| C002        |  28 |      3 |              85 |           255 | Month-to-month |             5 | Yes   |
+
+The component produces the dataset as a Kubeflow artifact.
+
+---
+
+# 5. Stage 2 — Validate Dataset
+
+The validation component checks that the generated dataset has the expected structure.
+
+Typical validation checks include:
+
+```text
+Expected columns
+       |
+       v
+Missing values
+       |
+       v
+Data types
+       |
+       v
+Target column
+       |
+       v
+Dataset validation
+```
+
+The expected columns are:
+
+```text
+customer_id
+age
+tenure
+monthly_charges
+total_charges
+contract_type
+support_calls
+churn
+```
+
+If validation fails, the downstream pipeline stages should not continue with invalid data.
+
+---
+
+# 6. Stage 3 — Preprocess Data
+
+The preprocessing component prepares the dataset for machine learning.
+
+The workflow separates:
+
+```text
+Features
+```
+
+from:
+
+```text
+Target
+```
+
+The target variable is:
+
+```text
+churn
+```
+
+The remaining model features are used as inputs to the machine learning model.
+
+Categorical features such as:
+
+```text
+contract_type
+```
+
+must be transformed into a machine-learning-compatible representation.
+
+The preprocessing stage produces the training-ready dataset.
+
+---
+
+# 7. Stage 4 — Train Model
+
+The training component trains the machine learning model.
+
+Current model:
+
+```text
+RandomForestClassifier
+```
+
+The training configuration includes:
+
+```text
+n_estimators = 100
+max_depth = 10
+random_state = 42
+```
+
+The training component also records MLflow information such as:
+
+```text
+model_type
+n_estimators
+max_depth
+random_state
+training_rows
+feature_count
+training_accuracy
+```
+
+MLflow Tracking is designed to record run metadata such as parameters and metrics, along with artifacts generated by ML workflows.
+
+---
+
+# 8. MLflow Experiment Tracking
+
+The training stage creates an MLflow experiment:
+
+```text
+customer-churn
+```
+
+The training run is recorded as:
+
+```text
+random-forest-training
+```
+
+The model is logged to MLflow as an artifact.
+
+Conceptually:
+
+```text
+Kubeflow Training Component
+             |
+             v
+       MLflow Tracking
+             |
+      +------+------+
+      |             |
+      v             v
+   Parameters     Metrics
+      |             |
+      +------+------+
+             |
+             v
+          Model
+             |
+             v
+          MinIO
+```
+
+MLflow experiments group related runs, while individual runs record execution metadata, parameters, metrics, and artifacts.
+
+---
+
+# 9. Stage 5 — Evaluate Model
+
+The evaluation component evaluates the trained model using test data.
+
+The current evaluation metrics are:
+
+```text
+Accuracy
+Precision
+Recall
+F1 Score
+Confusion Matrix
+```
+
+The evaluation results are also recorded in MLflow.
+
+The evaluation workflow is:
+
+```text
+Test Dataset
+     |
+     v
+Trained Model
+     |
+     v
+Predictions
+     |
+     v
++----------------------+
+| Evaluation Metrics   |
++----------------------+
+     |
+     +----> Accuracy
+     |
+     +----> Precision
+     |
+     +----> Recall
+     |
+     +----> F1 Score
+     |
+     +----> Confusion Matrix
+```
+
+---
+
+# 10. MLflow and PostgreSQL
+
+The project uses PostgreSQL as the MLflow backend metadata store.
+
+The architecture is:
+
+```text
+                  MLflow
+                     |
+                     v
+              PostgreSQL
+                     |
+        +------------+------------+
+        |                         |
+        v                         v
+   Experiments                  Runs
+        |                         |
+        v                         v
+   Parameters                  Metrics
+```
+
+PostgreSQL stores MLflow tracking metadata.
+
+---
+
+# 11. MLflow and MinIO
+
+MinIO is used as the object storage location for MLflow artifacts.
+
+Artifacts can include:
+
+```text
+Trained Model
+CSV Files
+JSON Files
+Text Files
+Other ML Outputs
+```
+
+The architecture is:
+
+```text
+                 MLflow
+                    |
+                    v
+             Artifact Store
+                    |
+                    v
+                  MinIO
+                    |
+          +---------+---------+
+          |         |         |
+          v         v         v
+        Model      CSV       JSON
+```
+
+This separates MLflow metadata from large or file-based artifacts.
+
+---
+
+# 12. Kubeflow + MLflow Relationship
+
+Kubeflow and MLflow serve different roles.
+
+### Kubeflow Pipelines
+
+Kubeflow Pipelines manages:
+
+```text
+Pipeline structure
+Component execution
+Task dependencies
+Pipeline runs
+Artifact flow
+Kubernetes execution
+```
+
+### MLflow
+
+MLflow manages:
+
+```text
+Experiments
+Runs
+Parameters
+Metrics
+Models
+Artifacts
+```
+
+The relationship can be visualized as:
+
+```text
+              Kubeflow Pipelines
+                     |
+                     |
+              Pipeline Execution
+                     |
+       +-------------+-------------+
+       |                           |
+       v                           v
+ Data Processing             Model Training
+                                   |
+                                   v
+                              MLflow Tracking
+                                   |
+                         +---------+---------+
+                         |                   |
+                         v                   v
+                    PostgreSQL             MinIO
+```
+
+Kubeflow's documentation also describes MLflow integration as a way to connect pipeline runs with MLflow experiments and expose pipeline parameters and metrics in MLflow.
+
+---
+
+# 13. Current Project Workflow
+
+The implemented workflow is:
+
+```text
++-------------------+
+| Create Dataset    |
++---------+---------+
+          |
+          v
++-------------------+
+| Validate Dataset  |
++---------+---------+
+          |
+          v
++-------------------+
+| Preprocess Data   |
++---------+---------+
+          |
+          v
++-------------------+
+| Train Random      |
+| Forest Model      |
++---------+---------+
+          |
+          +----------------------+
+          |                      |
+          v                      v
+     MLflow Run             Model Artifact
+          |                      |
+          v                      v
+     PostgreSQL                 MinIO
+          |
+          v
++-------------------+
+| Evaluate Model    |
++---------+---------+
+          |
+          v
+     MLflow Run
+```
+
+---
+
+# 14. Pipeline Artifacts
+
+Kubeflow Pipeline components exchange data through pipeline inputs and outputs.
+
+The main artifacts are:
+
+```text
+Dataset
+   |
+   v
+Validated Dataset
+   |
+   v
+Processed Dataset
+   |
+   v
+Trained Model
+   |
+   v
+Evaluation Results
+```
+
+This makes the workflow modular and allows each pipeline stage to have a defined input and output.
+
+Kubeflow Pipelines supports artifact types such as datasets, models, metrics, and other outputs between components.
+
+---
+
+# 15. Pipeline Compilation
+
+The pipeline is written using the Kubeflow Pipelines Python SDK.
+
+Conceptually:
+
+```text
+Python Pipeline Code
+        |
+        v
+KFP Compiler
+        |
+        v
+Pipeline YAML
+        |
+        v
+Kubeflow Pipelines
+        |
+        v
+Kubernetes Pods
+```
+
+The compiled pipeline file is:
+
+```text
+customer_churn_mlflow_pipeline.yaml
+```
+
+The KFP compiler converts the pipeline DSL into a pipeline specification that can be submitted to a KFP backend.
+
+---
+
+# 16. Kubernetes Execution
+
+When the pipeline runs, Kubeflow Pipelines schedules the pipeline components as workloads in Kubernetes.
+
+Conceptually:
 
 ```text
 Kubeflow Pipeline
        |
        v
-    Katib HPO
+KFP Backend
        |
        v
-Best Model
+Kubernetes
        |
-       v
-MLflow
+       +----> Create Dataset Pod
        |
-       v
-Model Registry
+       +----> Validation Pod
        |
-       v
-KServe
+       +----> Preprocessing Pod
        |
-       v
-Prediction API
+       +----> Training Pod
+       |
+       +----> Evaluation Pod
 ```
+
+Each component executes its own containerized workload.
+
+---
+
+# 17. Current Infrastructure
+
+The project runs the following major services:
+
+```text
+Kubernetes
+│
+├── Kubeflow
+│   ├── Kubeflow Pipelines
+│   ├── Dashboard
+│   ├── Katib
+│   ├── KServe
+│   └── Other Kubeflow Components
+│
+└── ml-registry
+    ├── MLflow
+    ├── PostgreSQL
+    └── MinIO
+```
+
+The Kubeflow components are deployed as part of the Kubeflow Community Distribution.
+
+MLflow is deployed separately in the `ml-registry` namespace.
+
+---
+
+# 18. Completed MLOps Stages
+
+The following stages are currently implemented:
+
+| Phase | Component                  | Status    |
+| ----- | -------------------------- | --------- |
+| 1     | Dataset Creation           | Completed |
+| 2     | Dataset Validation         | Completed |
+| 3     | Data Preprocessing         | Completed |
+| 4     | Model Training             | Completed |
+| 5     | Model Evaluation           | Completed |
+| 6     | MLflow Experiment Tracking | Completed |
+| 7     | PostgreSQL Backend         | Completed |
+| 8     | MinIO Artifact Storage     | Completed |
+
+---
+
+# 19. Planned MLOps Stages
+
+The next stages are planned as the project evolves:
+
+```text
+Current
+   |
+   v
+Katib Hyperparameter Optimization
+   |
+   v
+Distributed Training
+   |
+   v
+Kubeflow Model Registry
+   |
+   v
+KServe Model Serving
+   |
+   v
+Prediction API
+   |
+   v
+Monitoring and Observability
+   |
+   v
+CI/CD
+   |
+   v
+GitOps
+```
+
+These stages extend the project from an ML training workflow into a broader production-oriented MLOps platform.
+
+---
+
+# 20. Target Architecture
+
+The long-term architecture is:
+
+```text
+                         Customer Data
+                              |
+                              v
+                     +----------------+
+                     |    Kubeflow    |
+                     |    Pipelines   |
+                     +-------+--------+
+                             |
+            +----------------+----------------+
+            |                |                |
+            v                v                v
+       Validation       Preprocessing      Training
+                                                |
+                                                v
+                                         +-------------+
+                                         |    Katib    |
+                                         | HPO / Trials|
+                                         +------+------+
+                                                |
+                                                v
+                                           Best Model
+                                                |
+                                                v
+                                         +-------------+
+                                         |    MLflow   |
+                                         +------+------+
+                                                |
+                              +-----------------+----------------+
+                              |                                  |
+                              v                                  v
+                         PostgreSQL                            MinIO
+                         Metadata                             Artifacts
+                              |
+                              v
+                      +----------------+
+                      | Model Registry|
+                      +-------+--------+
+                              |
+                              v
+                         +---------+
+                         | KServe  |
+                         +----+----+
+                              |
+                              v
+                       Prediction API
+                              |
+                              v
+                       Monitoring
+                              |
+                              v
+                     Prometheus / Grafana
+```
+
+---
+
+# 21. Summary
+
+The Customer Churn Prediction project demonstrates how a machine learning problem can be transformed into a structured Kubernetes-native MLOps workflow.
+
+The current implementation covers:
+
+```text
+Dataset
+   ↓
+Validation
+   ↓
+Preprocessing
+   ↓
+Training
+   ↓
+Evaluation
+   ↓
+MLflow Tracking
+   ↓
+PostgreSQL
+   ↓
+MinIO
+```
+
+The planned architecture extends this to:
+
+```text
+Katib
+   ↓
+Model Registry
+   ↓
+KServe
+   ↓
+Prediction API
+   ↓
+Monitoring
+   ↓
+CI/CD
+   ↓
+GitOps
+```
+
+The key principle of the project is:
+
+> **Kubeflow orchestrates the ML workflow, while MLflow tracks the experiments, models, metrics, and artifacts.**
+
