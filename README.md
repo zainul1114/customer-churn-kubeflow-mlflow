@@ -221,6 +221,8 @@ kubectl get svc -n kubeflow
 
 ### Access Kubeflow Dashboard
 
+![Kubeflow](images/kubeflow_pipeline.png)
+
 For local access, port-forward the dashboard service:
 
 ```bash
@@ -361,6 +363,8 @@ The pipeline contains:
 The workflow uses KFP artifact inputs and outputs rather than relying on a shared notebook filesystem.
 
 ## MLflow Integration
+
+![MLflow](images/mlflow_runs.png)
 
 The pipeline sends experiment information to:
 
