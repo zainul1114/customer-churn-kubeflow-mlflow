@@ -4,6 +4,8 @@ An end-to-end Machine Learning workflow built on **Kubeflow Community Distributi
 
 The project demonstrates how Kubernetes-native ML orchestration can be combined with experiment tracking, model artifacts, PostgreSQL metadata storage, and MinIO object storage.
 
+![CCP MLOps Archtecture](images/ccp_mlops_arch.png)
+
 ## Project Objective
 
 The objective of this project is to build a reproducible, Kubernetes-native Customer Churn Prediction workflow that covers the complete ML lifecycle from dataset creation and validation through preprocessing, model training, evaluation, experiment tracking, and artifact management.
