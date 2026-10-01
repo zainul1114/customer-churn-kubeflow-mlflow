@@ -221,7 +221,7 @@ kubectl get svc -n kubeflow
 
 ### Access Kubeflow Dashboard
 
-![Kubeflow](images/kubeflow_pipeline.png)
+
 
 For local access, port-forward the dashboard service:
 
@@ -288,6 +288,8 @@ Kubeflow Dashboard
 ```
 
 The current project has primarily used **Kubeflow Pipelines** so far. Katib, Model Registry, and KServe are part of the planned next stages.
+
+![Kubeflow](images/kubeflow_pipeline.png)
 
 ### Verify Kubeflow Pipeline Service
 
