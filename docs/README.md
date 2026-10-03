@@ -1,151 +1,356 @@
-# Customer Churn Prediction — End-to-End MLOps on Kubernetes
+# Customer Churn Prediction — Kubeflow + MLflow
 
-An end-to-end, Kubernetes-native Machine Learning project built with **Kubeflow Community Distribution (KCD) 26.03.1**, **Kubeflow Pipelines 2.16.0**, and **MLflow 3.16.1**.
+An end-to-end Machine Learning workflow built on **Kubeflow Community Distribution (KCD) 26.03.1** and **MLflow 3.16.1**.
 
-The project demonstrates the complete ML lifecycle: dataset generation and validation, preprocessing, model training, hyperparameter optimization, experiment tracking, artifact storage, model registration, model serving, prediction API development, monitoring, and GitOps-based deployment.
+The project demonstrates how Kubernetes-native ML orchestration can be combined with experiment tracking, model artifacts, PostgreSQL metadata storage, and MinIO object storage.
 
-**Project repository:** https://github.com/zainul1114/customer-churn-kubeflow-mlflow
-
-**Architecture:** [Customer Churn MLOps Architecture](images/ccp-mlops-arch.png)
-
----
+![CCP MLOps Archtecture](images/ccp_mlops_arch.png)
 
 ## Project Objective
 
-Build a reproducible, Kubernetes-native Customer Churn Prediction platform that demonstrates how data science workflows and cloud-native infrastructure work together.
+The objective of this project is to build a reproducible, Kubernetes-native Customer Churn Prediction workflow that covers the complete ML lifecycle from dataset creation and validation through preprocessing, model training, evaluation, experiment tracking, and artifact management.
 
-The project combines Kubeflow Pipelines for orchestration, Katib for hyperparameter optimization, MLflow for experiment tracking, PostgreSQL for tracking metadata, MinIO for MLflow artifacts, Kubeflow Model Registry for model registration, KServe for serving, FastAPI for predictions, Prometheus and Grafana for monitoring, and GitHub Actions, GHCR, Kustomize, and Argo CD for CI/CD and GitOps.
+The project currently focuses on establishing a reliable foundation with:
 
-The implementation has progressed beyond the original pipeline-and-tracking foundation. **Phases 1–6, 6.1, and 8–12 are completed and validated. Distributed training (Phase 7) remains planned.**
+- Kubeflow Pipelines for workflow orchestration
+- MLflow for experiment and run tracking
+- PostgreSQL for MLflow metadata
+- MinIO for MLflow artifacts and model files
+- Scikit-learn RandomForest for the churn model
+- KFP Dataset, Model, and Metrics artifacts
 
-## What Is Customer Churn Prediction?
+The next planned stages are Katib hyperparameter optimization, distributed training, Kubeflow Model Registry, and KServe model serving.
 
-Customer churn prediction estimates whether a customer is likely to stop using a service. A machine-learning model learns patterns from customer attributes and historical churn labels, then predicts a churn class for a new customer record.
-
-This project uses a synthetic dataset with fields including `age`, `tenure`, `monthly_charges`, `total_charges`, `contract_type`, `support_calls`, and `churn`.
-
-After one-hot encoding `contract_type`, the Random Forest model expects eight features and returns:
-- `0` — No Churn
-- `1` — Churn
-
-Example request:
-
-```json
-{
-  "age": 35,
-  "tenure": 12,
-  "monthly_charges": 75.0,
-  "total_charges": 900.0,
-  "support_calls": 3,
-  "contract_type": "Month-to-month"
-}
-```
-
-The API transforms this record into the feature order expected by the model, sends it to KServe, and returns the prediction. This is a demonstration using synthetic data, not a validated business decision system.
-
-## Complete Architecture
-
-![Customer Churn Prediction MLOps Architecture](images/ccp-mlops-arch.png)
+## Current Workflow
 
 ```text
 Customer Churn Dataset
         |
         v
-Kubeflow Pipelines
-  |-- Dataset Creation
-  |-- Data Validation
-  |-- Preprocessing
-  |-- Model Training
-  |-- Model Evaluation
-        |
-        +---- Katib Hyperparameter Optimization
++-------------------+
+| Data Validation   |
++-------------------+
         |
         v
-MLflow Tracking
-   |                 |
-   v                 v
-PostgreSQL          MinIO
-Metadata            ML Artifacts / Models
-   |
-   v
-Kubeflow Model Registry
-   |
-   v
-KServe Model Serving
-   |
-   v
-FastAPI Prediction API
-   |
-   +---- Prometheus ---- Grafana
-
-
-Developer --> GitHub --> GitHub Actions
-                           |-- pytest
-                           |-- Docker build
-                           |-- Push image to GHCR
-                                    |
-                                    v
-                              GitOps Repository
-                                    |
-                                    v
-                                 Argo CD
-                                    |
-                                    v
-                               Kubernetes
++-------------------+
+| Preprocessing     |
+| - Encode category |
+| - Train/Test split|
++-------------------+
+        |
+        v
++-------------------+
+| Model Training    |
+| RandomForest      |
++-------------------+
+        |
+        +----------------------+
+        |                      |
+        v                      v
++-------------------+   +-------------------+
+| Model Evaluation  |   | MLflow Tracking   |
+| Accuracy          |   | Parameters        |
+| Precision         |   | Metrics           |
+| Recall            |   | Model             |
+| F1                |   | Artifacts         |
++-------------------+   +---------+---------+
+                                  |
+                         +--------+--------+
+                         |                 |
+                         v                 v
+                  +------------+    +-------------+
+                  | PostgreSQL |    |    MinIO    |
+                  | Metadata   |    | Artifacts   |
+                  +------------+    +-------------+
 ```
-
-**Storage distinction:** KCD's Kubeflow Pipelines artifact storage in this environment uses the KCD-provided SeaweedFS integration. The separately deployed MinIO instance stores MLflow artifacts and model files. These are distinct storage systems.
 
 ## Tools and Technologies
 
-| Area | Technology / Version |
+| Area | Technology |
 |---|---|
 | Container orchestration | Kubernetes |
-| Kubeflow distribution | KCD 26.03.1 |
+| ML platform | Kubeflow Community Distribution 26.03.1 |
 | Pipeline orchestration | Kubeflow Pipelines 2.16.0 |
-| Hyperparameter optimization | Katib 0.19.0 |
-| Model registry | Kubeflow Model Registry 0.3.7 |
-| Model serving | KServe 0.18.0 |
 | Experiment tracking | MLflow 3.16.1 |
 | ML framework | Scikit-learn 1.5.2 |
-| Programming language | Python 3.11 |
+| Programming | Python 3.11 |
 | Metadata database | PostgreSQL 15 |
-| ML artifact storage | MinIO |
-| Model | RandomForestClassifier |
-| Model serialization | skops for MLflow logging; joblib-compatible artifact for KServe |
-| Object-storage SDK | boto3 / botocore |
-| Prediction API | FastAPI + Uvicorn |
-| API metrics | prometheus-client |
-| Monitoring | Prometheus |
-| Dashboards | Grafana |
-| CI | GitHub Actions |
-| Container registry | GitHub Container Registry (GHCR) |
-| GitOps | Argo CD |
-| Manifest rendering | Kustomize |
-| Container build | Docker |
+| Object storage | MinIO |
+| ML model | RandomForestClassifier |
+| Model serialization | MLflow / joblib |
+| Artifact SDK | boto3 / botocore |
+| Pipeline compiler | KFP SDK |
 
-## Project Phases and Status
 
-| Phase | Scope | Status |
-|---|---|---|
-| 1 | Dataset creation and validation | **Completed** |
-| 2 | Preprocessing and model training | **Completed** |
-| 3 | Model evaluation | **Completed** |
-| 4 | MLflow experiment tracking | **Completed** |
-| 5 | PostgreSQL metadata and MinIO artifacts | **Completed** |
-| 6 | Katib hyperparameter optimization | **Completed** |
-| 6.1 | Katib best parameters integrated into MLflow training pipeline | **Completed** |
-| 7 | Distributed training | **Planned** |
-| 8 | Kubeflow Model Registry | **Completed** |
-| 9 | KServe model serving | **Completed** |
-| 10 | FastAPI prediction API | **Completed** |
-| 11 | Prometheus and Grafana monitoring | **Completed** |
-| 12 | GitHub Actions, GHCR, GitOps, and Argo CD | **Completed** |
-| 13 | Production hardening and advanced MLOps | **Next** |
+## Kubeflow Installation
 
-### Phases 1–5: Kubeflow Pipeline and MLflow
+This project uses **Kubeflow Community Distribution (KCD) 26.03.1** installed from the Kubeflow manifests repository.
 
-The baseline pipeline contains:
+The official Kubeflow Community Distribution uses Kustomize-based installation and recommends checking the Kubernetes version supported by the specific release before installation. The manifests installation can be applied with `kustomize build ... | kubectl apply ...`; the upstream documentation also notes that CRD/resource readiness can require re-applying the command. citeturn0search1turn0search0
+
+### Prerequisites
+
+Before installing Kubeflow, prepare a Kubernetes cluster with:
+
+- Kubernetes cluster with a working `kubectl` context
+- A default `StorageClass`
+- Linux-based Kubernetes worker nodes
+- Sufficient CPU and memory for the Kubeflow components
+- Internet access to pull the required container images
+- `kubectl`
+- `kustomize`
+- Git
+- A user with permission to create cluster-wide Kubernetes resources
+
+For this project, the installation was performed with **KCD 26.03.1** and the project environment was validated on a Kubernetes 1.34+ cluster.
+
+Check the cluster:
+
+```bash
+kubectl cluster-info
+kubectl get nodes
+kubectl get storageclass
+kubectl version
+```
+
+Verify that a default StorageClass exists:
+
+```bash
+kubectl get storageclass
+```
+
+Example:
+
+```text
+NAME                 PROVISIONER
+local-path (default) rancher.io/local-path
+```
+
+> **Note:** Resource requirements depend on which Kubeflow components are enabled. The upstream Kubeflow documentation recommends at least 16 GB RAM and 8 CPU cores for the full single-command installation on Kind; smaller installations can be configured by excluding components. citeturn0search1
+
+### Install Kustomize
+
+This project used Kustomize **v5.0.3**:
+
+```bash
+wget https://github.com/kubernetes-sigs/kustomize/releases/download/kustomize%2Fv5.0.3/kustomize_v5.0.3_linux_amd64.tar.gz
+
+tar -xzf kustomize_v5.0.3_linux_amd64.tar.gz
+
+sudo mv kustomize /usr/local/bin/
+
+kustomize version
+```
+
+Verify:
+
+```bash
+which kustomize
+kustomize version
+kubectl version
+```
+
+### Clone Kubeflow Community Distribution
+
+Clone the Kubeflow manifests repository:
+
+```bash
+git clone https://github.com/kubeflow/manifests.git
+cd manifests
+```
+
+Checkout the project-tested KCD release:
+
+```bash
+git checkout 26.03.1
+```
+
+Verify:
+
+```bash
+git branch --show-current
+git describe --tags --always
+```
+
+### Install Kubeflow
+
+The complete Kubeflow platform can be installed from the `example` Kustomization.
+
+For this project, the installation command was:
+
+```bash
+while ! kustomize build example | kubectl apply --server-side --force-conflicts -f -; do
+    echo "Retrying to apply resources..."
+    sleep 15
+done
+```
+
+The retry loop is intentional. Kubeflow contains many CRDs, webhooks, controllers, and dependent resources, so some resources may not be ready during the first application. The upstream manifests documentation also recommends retrying when resources are not yet ready. citeturn0search1
+
+### Verify Kubeflow Installation
+
+Check the main Kubeflow namespace:
+
+```bash
+kubectl get pods -n kubeflow
+```
+
+Check the supporting namespaces:
+
+```bash
+kubectl get pods -n cert-manager
+kubectl get pods -n istio-system
+kubectl get pods -n auth
+kubectl get pods -n oauth2-proxy
+kubectl get pods -n knative-serving
+kubectl get pods -n kubeflow
+kubectl get pods -n kubeflow-user-example-com
+```
+
+Check all namespaces:
+
+```bash
+kubectl get pods -A
+```
+
+Check Kubeflow services:
+
+```bash
+kubectl get svc -n kubeflow
+```
+
+### Access Kubeflow Dashboard
+
+For local access, port-forward the dashboard service:
+
+```bash
+kubectl port-forward -n kubeflow svc/dashboard 8080:80
+```
+
+Open:
+
+```text
+http://localhost:8080
+```
+
+### Kubeflow Component Port Forwards Used in This Project
+
+The following services were used while developing and testing the project:
+
+```bash
+# Kubeflow Dashboard
+kubectl port-forward -n kubeflow svc/dashboard 8080:80
+
+# Jupyter Web App
+kubectl port-forward -n kubeflow svc/jupyter-web-app-service 8081:80
+
+# Kubeflow Pipelines UI
+kubectl port-forward -n kubeflow svc/ml-pipeline-ui 8082:80
+
+# Katib UI
+kubectl port-forward -n kubeflow svc/katib-ui 8083:80
+
+# KServe Models UI
+kubectl port-forward -n kubeflow svc/kserve-models-web-application 8084:80
+
+# TensorBoard
+kubectl port-forward -n kubeflow svc/tensorboards-web-app-service 8085:80
+
+# Volumes Web App
+kubectl port-forward -n kubeflow svc/volumes-web-app-service 8086:80
+
+# Model Catalog
+kubectl port-forward -n kubeflow svc/model-catalog 8087:8080
+```
+
+### Kubeflow Components Used by This Project
+
+The KCD installation provides the platform components used by the Customer Churn project, including:
+
+```text
+Kubeflow Dashboard
+       |
+       +-- Kubeflow Pipelines
+       |
+       +-- Jupyter
+       |
+       +-- Katib
+       |
+       +-- KServe
+       |
+       +-- TensorBoard
+       |
+       +-- Model Registry
+       |
+       +-- Model Catalog
+```
+
+The current project has primarily used **Kubeflow Pipelines** so far. Katib, Model Registry, and KServe are part of the planned next stages.
+
+### Verify Kubeflow Pipeline Service
+
+Check:
+
+```bash
+kubectl get pods -n kubeflow | grep -E 'ml-pipeline|ml-pipeline-ui'
+```
+
+Check services:
+
+```bash
+kubectl get svc -n kubeflow | grep ml-pipeline
+```
+
+The pipeline UI can be accessed through:
+
+```bash
+kubectl port-forward -n kubeflow svc/ml-pipeline-ui 8082:80
+```
+
+Then open:
+
+```text
+http://localhost:8082
+```
+
+### Installation Troubleshooting
+
+If the installation reports an error such as:
+
+```text
+resource mapping not found
+```
+
+or:
+
+```text
+no matches for kind
+```
+
+the required CRD may not have become ready before a dependent resource was created.
+
+Re-run the installation command:
+
+```bash
+while ! kustomize build example | kubectl apply --server-side --force-conflicts -f -; do
+    echo "Retrying to apply resources..."
+    sleep 15
+done
+```
+
+Then check:
+
+```bash
+kubectl get pods -A
+kubectl get crd
+```
+
+The upstream Kubeflow documentation specifically notes that initial `kubectl apply` failures can occur because CRDs and dependent resources become ready at different times. citeturn0search1
+
+
+## Kubeflow Pipeline
+
+The pipeline contains:
 
 1. `create_dataset`
 2. `validate_dataset`
@@ -153,321 +358,152 @@ The baseline pipeline contains:
 4. `train_model`
 5. `evaluate_model`
 
-KFP artifact inputs and outputs connect the tasks. The pipeline creates a synthetic customer dataset, validates it, preprocesses the categorical contract field, trains a Random Forest classifier, and evaluates it.
+The workflow uses KFP artifact inputs and outputs rather than relying on a shared notebook filesystem.
 
-MLflow records parameters, metrics, model information, and evaluation artifacts. PostgreSQL stores MLflow tracking metadata, while MinIO stores MLflow artifacts.
+## MLflow Integration
 
-### Phase 6: Katib Hyperparameter Optimization
-
-Katib searched the following Random Forest parameters using Random Search, with eight trials and two parallel trials:
-
-| Parameter | Search range |
-|---|---|
-| `n_estimators` | 50–200 |
-| `max_depth` | 5–20 |
-| `min_samples_split` | 2–10 |
-
-Recorded best trial:
-
-| Item | Result |
-|---|---|
-| Best trial | `customer-churn-randomforest-n4zqb8cq` |
-| Katib objective accuracy | `0.635` |
-| `n_estimators` | `117` |
-| `max_depth` | `7` |
-| `min_samples_split` | `9` |
-
-### Phase 6.1: Katib-to-MLflow Integration
-
-The optimized parameters were passed into a Kubeflow pipeline component. The component trained the model, logged the run and metrics to MLflow, and uploaded the model artifact to MinIO.
-
-- KFP run ID: `bbc8aac4-7c9f-4ed4-ba7c-f4aa6ca41a00`
-- MLflow run ID: `de79dc64abe8450790bff92694df78d3`
-- MLflow run name: `katib-optimized-randomforest`
-
-Recorded metrics:
-
-| Metric | Value |
-|---|---:|
-| Training accuracy | 0.8300 |
-| Test accuracy | 0.6250 |
-| Test precision | 0.6125 |
-| Test recall | 0.5269 |
-| Test F1 | 0.5665 |
-
-Katib's objective accuracy and the later pipeline test accuracy come from their respective executions and are not assumed to be identical.
-
-### Phase 8: Kubeflow Model Registry
-
-The trained model was registered in Kubeflow Model Registry.
-
-| Field | Value |
-|---|---|
-| Model name | `customer-churn-randomforest` |
-| Version | `v1.0.0` |
-| Framework | Scikit-learn |
-| Model type | `RandomForestClassifier` |
-| Optimization | Katib Random Search |
-| MLflow run | `de79dc64abe8450790bff92694df78d3` |
-
-### Phase 9: KServe Model Serving
-
-The model was deployed as a KServe `InferenceService` in the `kubeflow-user-example-com` namespace.
-
-The MLflow 3 logged model artifact was stored as `model.skops`. The deployed KServe sklearn runtime expected a joblib/pickle-compatible model file, so a conversion job generated `model.joblib` and uploaded it to MinIO. KServe loaded the converted model and returned a ready status. A test prediction returned:
-
-```json
-{
-  "predictions": [0]
-}
-```
-
-### Phase 10: FastAPI Prediction API
-
-FastAPI provides a JSON interface to the KServe model.
-
-| Endpoint | Method | Purpose |
-|---|---|---|
-| `/health` | GET | API health |
-| `/model/ready` | GET | Checks KServe model readiness |
-| `/predict` | POST | Validates input and returns a prediction |
-| `/metrics` | GET | Exposes Prometheus metrics |
-
-Example response:
-
-```json
-{
-  "prediction": 0,
-  "churn": false,
-  "prediction_label": "No Churn",
-  "model": "customer-churn-randomforest",
-  "features": [35, 12, 75.0, 900.0, 3, 1, 0, 0]
-}
-```
-
-### Phase 11: Monitoring and Observability
-
-Prometheus scrapes the FastAPI `/metrics` endpoint through a Kubernetes `ServiceMonitor`. Grafana dashboards display API and prediction metrics.
-
-Custom metrics:
-
-- `customer_churn_api_requests_total`
-- `customer_churn_predictions_total`
-- `customer_churn_api_errors_total`
-- `customer_churn_prediction_latency_seconds`
-- `customer_churn_kserve_ready`
-
-Example PromQL:
-
-```promql
-sum(customer_churn_predictions_total)
-```
-
-```promql
-sum by (label) (customer_churn_predictions_total)
-```
-
-```promql
-sum(rate(customer_churn_api_requests_total[5m]))
-```
-
-```promql
-histogram_quantile(
-  0.95,
-  sum by (le) (
-    rate(customer_churn_prediction_latency_seconds_bucket[5m])
-  )
-)
-```
-
-### Phase 12: CI/CD and GitOps
-
-GitHub Actions runs API tests and builds the Docker image. On push events, the workflow logs in to GHCR and publishes commit-based and default-branch image tags.
+The pipeline sends experiment information to:
 
 ```text
-GitHub source repository
-        |
-        v
-GitHub Actions
-  |-- pytest
-  |-- Docker build
-  |-- Push image to GHCR
-        |
-        v
-GitOps manifests updated with image tag
-        |
-        v
-Git commit and push
-        |
-        v
-Argo CD detects repository state
-        |
-        v
-Kustomize renders manifests
-        |
-        v
-Kubernetes Deployment updated
+http://mlflow.ml-registry.svc.cluster.local:5000
 ```
 
-The image validated during this phase was:
+The MLflow experiment is:
 
 ```text
-ghcr.io/zainul1114/customer-churn-kubeflow-mlflow/customer-churn-api:d2f416d
+customer-churn
 ```
 
-The Argo CD application `customer-churn-dev` was verified as **Synced** and **Healthy**, and the Kubernetes Deployment rollout completed successfully.
+Training records include:
+
+- model type
+- number of estimators
+- maximum depth
+- random state
+- training rows
+- feature count
+- training accuracy
+
+Evaluation records include:
+
+- accuracy
+- precision
+- recall
+- F1 score
+- confusion matrix artifact
+
+## MLflow Storage Architecture
+
+```text
+MLflow
+  |
+  +---- PostgreSQL
+  |       |
+  |       +-- experiments
+  |       +-- runs
+  |       +-- parameters
+  |       +-- metrics
+  |       +-- model metadata
+  |
+  +---- MinIO
+          |
+          +-- ML artifacts
+          +-- trained models
+          +-- datasets
+          +-- reports
+          +-- JSON/CSV/TXT files
+```
+
+## Verified Implementation
+
+The following have been successfully validated:
+
+- Kubeflow Pipeline execution
+- Customer churn dataset generation
+- Dataset validation
+- Preprocessing
+- RandomForest training
+- Model evaluation
+- MLflow experiment creation
+- MLflow run creation
+- Parameter logging
+- Metric logging
+- Model logging
+- MinIO artifact upload
+- MLflow artifact listing
+- PostgreSQL MLflow metadata storage
+
+A successful integrated Kubeflow + MLflow pipeline run was completed on October 2, 2026.
 
 ## Repository Structure
 
-This tree reflects the integrated project structure. Supporting scripts, manifests, and documentation are grouped by project component.
-
 ```text
 customer-churn-kubeflow-mlflow/
-├── .github/
-│   └── workflows/
-│       └── ci.yaml
 ├── README.md
-├── LINKEDIN_POST.md
-├── images/
-│   ├── ccp-mlops-arch.png
-│   ├── kubeflow_pipeline.png
-│   └── mlflow_runs.png
 ├── pipelines/
 │   └── customer_churn_mlflow_pipeline.py
-├── customer_churn_katib_mlflow_phase6_1/
-│   ├── README.md
-│   ├── pipelines/
-│   │   └── customer_churn_katib_optimized_mlflow_pipeline.py
-│   ├── scripts/
-│   │   └── get_katib_best_params.sh
-│   ├── docs/
-│   │   └── workflow.md
-│   └── customer_churn_katib_optimized_mlflow_pipeline.yaml
-├── katib/
-│   ├── Dockerfile
-│   ├── train.py
-│   └── customer_churn_katib.yaml
+├── tests/
+│   └── mlflow_artifact_test.py
 ├── mlflow/
 │   ├── Dockerfile
 │   └── mlflow-registry.yaml
-├── model_registry/
-│   └── scripts/
-│       └── register_customer_churn_model.py
-├── kserve/
-│   ├── customer-churn-inferenceservice.yaml
-│   ├── customer-churn-kserve-allow.yaml
-│   ├── customer-churn-kserve-profile.yaml
-│   └── customer-churn-sa.yaml
-├── kserve_model_conversion/
-│   ├── Dockerfile
-│   ├── convert_model.py
-│   └── kserve-model-conversion-job.yaml
-├── customer_churn_project/
-│   ├── api/
-│   │   ├── Dockerfile
-│   │   ├── main.py
-│   │   ├── requirements.txt
-│   │   └── customer-churn-api-servicemonitor.yaml
-│   └── customer-churn-api.yaml
-├── tests/
-│   ├── mlflow_artifact_test.py
-│   └── test_customer_churn_api.py
-├── gitops/
-│   └── customer-churn-api/
-│       ├── base/
-│       │   ├── deployment.yaml
-│       │   ├── service.yaml
-│       │   ├── servicemonitor.yaml
-│       │   └── kustomization.yaml
-│       └── overlays/
-│           └── dev/
-│               └── kustomization.yaml
-├── argocd/
-│   └── customer-churn-argocd.yaml
-└── docs/
-    ├── customer-churn-prediction.md
-    └── workflow.md
+├── docs/
+│   └── workflow.md
+└── .gitignore
 ```
 
-## Run and Validate
+## Run the Pipeline
 
-### Compile the baseline pipeline
+Compile:
 
 ```bash
 python pipelines/customer_churn_mlflow_pipeline.py
 ```
 
-The compiler generates the pipeline YAML. Upload it to Kubeflow Pipelines and create a run.
+This generates:
 
-### Run API tests
-
-```bash
-python3.11 -m pip install -r customer_churn_project/api/requirements.txt
-python3.11 -m pytest -v tests/test_customer_churn_api.py
+```text
+customer_churn_mlflow_pipeline.yaml
 ```
 
-The API test suite previously completed with **8 passed**.
+Upload the generated YAML to Kubeflow Pipelines and create a run.
 
-### Build the API container locally
+## MLflow Artifact Test
 
-```bash
-docker build \
-  -t customer-churn-api:local \
-  customer_churn_project/api
-```
-
-### Render GitOps manifests
+The repository also includes a standalone artifact validation script:
 
 ```bash
-kustomize build gitops/customer-churn-api/overlays/dev
+python tests/mlflow_artifact_test.py
 ```
 
-### Check Argo CD
+It creates and logs:
 
-```bash
-kubectl get applications -n argocd
-kubectl get application customer-churn-dev -n argocd \
-  -o jsonpath='{.status.sync.status}{"\n"}{.status.health.status}{"\n"}'
+- CSV dataset
+- JSON metrics
+- JSON model configuration
+- CSV predictions
+- text report
+- trained RandomForest model
+
+## Planned Roadmap
+
+```text
+Phase 1  Dataset + Validation                 [Completed]
+Phase 2  Preprocessing + Training             [Completed]
+Phase 3  Evaluation                           [Completed]
+Phase 4  MLflow Tracking                      [Completed]
+Phase 5  PostgreSQL + MinIO Artifacts         [Completed]
+Phase 6  Katib Hyperparameter Optimization    [Next]
+Phase 7  Distributed Training                 [Planned]
+Phase 8  Kubeflow Model Registry              [Planned]
+Phase 9  KServe Model Serving                 [Planned]
+Phase 10 Prediction API                       [Planned]
+Phase 11 Monitoring + Observability            [Planned]
+Phase 12 CI/CD + GitOps                       [Planned]
 ```
-
-### Check the API deployment
-
-```bash
-kubectl get deployment customer-churn-api -n kubeflow-user-example-com
-kubectl get pods -n kubeflow-user-example-com -l app=customer-churn-api
-kubectl rollout status deployment/customer-churn-api \
-  -n kubeflow-user-example-com
-```
-
-## Important Project Notes
-
-- KFP artifact storage and MLflow's MinIO artifact store are separate storage systems in this deployment.
-- PostgreSQL stores MLflow tracking metadata; MinIO stores MLflow model and run artifacts.
-- The original MLflow model artifact uses `model.skops`; the KServe sklearn runtime in this setup uses the converted `model.joblib`.
-- The current FastAPI deployment uses a revision-specific KServe private service URL. Replacing it with a stable endpoint is an identified Phase 13 hardening task.
-- The project uses synthetic data. Its metrics demonstrate the workflow and are not evidence of model performance on a real customer population.
-- Development credentials should be replaced with securely managed credentials before production use.
-
-## Next: Phase 13 — Production Hardening and Advanced MLOps
-
-Planned tasks:
-
-1. Replace the revision-specific KServe private service URL with a stable endpoint.
-2. Improve API-to-KServe resilience, timeouts, and error handling.
-3. Introduce GitOps-compatible secret management.
-4. Scan container images and generate an SBOM.
-5. Harden containers and Kubernetes workloads (non-root execution, resource controls, security context, and least privilege).
-6. Improve CI/CD with security checks and controlled image promotion.
-7. Add model/data monitoring and alerting where suitable evaluation data is available.
-8. Review Argo CD RBAC, sync policies, pruning, and self-healing.
-9. Complete distributed training as a separate planned milestone if it remains in scope.
-
----
 
 ## Author
 
-**Azilehub Academy**
+Azilehub Academy
 
-Focused on practical learning and engineering across DevOps, MLOps, Kubernetes, AI infrastructure, HPC, and cloud-native platforms.
-
-Repository: https://github.com/zainul1114/customer-churn-kubeflow-mlflow
+Focused on DevOps, MLOps, Kubernetes, AI Infrastructure, HPC, and cloud-native engineering.
