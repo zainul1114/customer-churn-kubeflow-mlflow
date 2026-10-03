@@ -1,0 +1,122 @@
+apiVersion: kubeflow.org/v1beta1
+kind: Experiment
+metadata:
+  name: customer-churn-randomforest
+  namespace: kubeflow-user-example-com
+
+spec:
+
+  # ---------------------------------------
+  # Objective
+  # ---------------------------------------
+  objective:
+    type: maximize
+    goal: 0.90
+    objectiveMetricName: accuracy
+
+  # ---------------------------------------
+  # Search algorithm
+  # ---------------------------------------
+  algorithm:
+    algorithmName: random
+    algorithmSettings:
+      - name: random_state
+        value: "42"
+
+  # ---------------------------------------
+  # Trial configuration
+  # ---------------------------------------
+  maxTrialCount: 8
+
+  parallelTrialCount: 2
+
+  maxFailedTrialCount: 2
+
+  # ---------------------------------------
+  # Hyperparameter search space
+  # ---------------------------------------
+  parameters:
+
+    - name: n_estimators
+      parameterType: int
+      feasibleSpace:
+        min: "50"
+        max: "200"
+
+    - name: max_depth
+      parameterType: int
+      feasibleSpace:
+        min: "5"
+        max: "20"
+
+    - name: min_samples_split
+      parameterType: int
+      feasibleSpace:
+        min: "2"
+        max: "10"
+
+  # ---------------------------------------
+  # Trial parameters
+  # ---------------------------------------
+  trialTemplate:
+
+    primaryContainerName: training-container
+
+    trialParameters:
+
+      - name: n_estimators
+        reference: n_estimators
+
+      - name: max_depth
+        reference: max_depth
+
+      - name: min_samples_split
+        reference: min_samples_split
+
+    trialSpec:
+
+      apiVersion: batch/v1
+      kind: Job
+
+      spec:
+
+        backoffLimit: 0
+
+        template:
+
+          metadata:
+            annotations:
+              sidecar.istio.io/inject: "false"
+
+          spec:
+
+            restartPolicy: Never
+
+            containers:
+
+              - name: training-container
+
+                image: customer-churn-katib:1.0
+
+                imagePullPolicy: IfNotPresent
+
+                command:
+                  - python
+                  - /app/train.py
+
+                args:
+
+                  - "--n_estimators=${trialParameters.n_estimators}"
+
+                  - "--max_depth=${trialParameters.max_depth}"
+
+                  - "--min_samples_split=${trialParameters.min_samples_split}"
+
+                resources:
+                  requests:
+                    cpu: "100m"
+                    memory: "256Mi"
+
+                  limits:
+                    cpu: "1"
+                    memory: "1Gi"

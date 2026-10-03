@@ -1,9 +1,28 @@
+# Python
 __pycache__/
 *.py[cod]
+*.pyo
+
+# Virtual environments
 .venv/
 venv/
+env/
+
+# Environment files
 .env
-*.log
+.env.*
+
+# Docker
+*.tar
+
+# Archives
+*.zip
+
+# OS / IDE
 .DS_Store
+.vscode/
+.idea/
+.pytest_cache/
+*.log
 .ipynb_checkpoints/
 customer_churn_mlflow_pipeline.yaml

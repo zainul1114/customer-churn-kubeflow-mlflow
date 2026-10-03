@@ -1,0 +1,26 @@
+apiVersion: serving.kserve.io/v1beta1
+kind: InferenceService
+
+metadata:
+  name: customer-churn-randomforest
+  namespace: kubeflow-user-example-com
+
+spec:
+  predictor:
+    serviceAccountName: customer-churn-sa
+
+    model:
+      modelFormat:
+        name: sklearn
+
+      runtime: kserve-sklearnserver
+
+      resources:
+        requests:
+          cpu: "100m"
+          memory: "256Mi"
+        limits:
+          cpu: "500m"
+          memory: "1Gi"
+
+      storageUri: "s3://mlflow-artifacts/3/models/m-a45cc18f6e494d8885ce64f02df0fadf/artifacts/kserve-model"

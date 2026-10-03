@@ -1,0 +1,19 @@
+apiVersion: security.istio.io/v1
+kind: AuthorizationPolicy
+metadata:
+  name: customer-churn-kserve-allow
+  namespace: kubeflow-user-example-com
+spec:
+  selector:
+    matchLabels:
+      serving.kserve.io/inferenceservice: customer-churn-randomforest
+  action: ALLOW
+  rules:
+  - from:
+    - source:
+        namespaces:
+        - kubeflow-user-example-com
+    to:
+    - operation:
+        ports:
+        - "8080"

@@ -1,0 +1,20 @@
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: customer-churn-api
+  namespace: kubeflow-user-example-com
+  labels:
+    app: customer-churn-api
+spec:
+  selector:
+    matchLabels:
+      app: customer-churn-api
+
+  namespaceSelector:
+    matchNames:
+      - kubeflow-user-example-com
+
+  endpoints:
+    - port: http
+      path: /metrics
+      interval: 15s

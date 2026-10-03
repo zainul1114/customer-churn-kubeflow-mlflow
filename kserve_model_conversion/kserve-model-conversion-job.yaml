@@ -1,0 +1,42 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: customer-churn-model-conversion
+  namespace: customer-churn
+spec:
+  backoffLimit: 0
+  template:
+    metadata:
+      labels:
+        app: customer-churn-model-conversion
+    spec:
+      restartPolicy: Never
+
+      containers:
+        - name: converter
+          image: customer-churn-model-converter:1.1
+          imagePullPolicy: IfNotPresent
+
+          env:
+            - name: AWS_ENDPOINT_URL
+              value: "http://minio.ml-registry.svc.cluster.local:9000"
+
+            - name: AWS_ACCESS_KEY_ID
+              valueFrom:
+                secretKeyRef:
+                  name: mlflow-minio-credentials
+                  key: AWS_ACCESS_KEY_ID
+
+            - name: AWS_SECRET_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: mlflow-minio-credentials
+                  key: AWS_SECRET_ACCESS_KEY
+
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "256Mi"
+            limits:
+              cpu: "500m"
+              memory: "1Gi"

@@ -1,0 +1,57 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: customer-churn-api
+  labels:
+    app: customer-churn-api
+spec:
+  replicas: 1
+
+  selector:
+    matchLabels:
+      app: customer-churn-api
+
+  template:
+    metadata:
+      labels:
+        app: customer-churn-api
+
+    spec:
+      containers:
+        - name: api
+          image: customer-churn-api:1.1
+          imagePullPolicy: IfNotPresent
+
+          env:
+            - name: KSERVE_URL
+              value: "http://customer-churn-randomforest-predictor-00002-private:8012"
+
+            - name: MODEL_NAME
+              value: "customer-churn-randomforest"
+
+          ports:
+            - name: http
+              containerPort: 8080
+
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "128Mi"
+
+            limits:
+              cpu: "500m"
+              memory: "512Mi"
+
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 10
+
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 10
+            periodSeconds: 20
