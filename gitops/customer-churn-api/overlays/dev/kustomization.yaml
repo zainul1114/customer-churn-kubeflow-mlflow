@@ -8,5 +8,5 @@ resources:
 
 images:
   - name: customer-churn-api
-    newName: customer-churn-api
-    newTag: "1.1"
+    newName: ghcr.io/zainul1114/customer-churn-kubeflow-mlflow/customer-churn-api
+    newTag: "d2f416d"
