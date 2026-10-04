@@ -8,8 +8,6 @@ The project demonstrates the complete ML lifecycle: dataset generation and valid
 
 **Architecture:** [Customer Churn MLOps Architecture](images/ccp-mlops-arch-on-k8s.png)
 
-
-**Architecture:** [Customer Churn MLOps Arch](images/ccp-mlops-arch.png)
 ---
 
 ## Project Objective
@@ -47,7 +45,7 @@ The API transforms this record into the feature order expected by the model, sen
 
 ## Complete Architecture
 
-![Customer Churn Prediction MLOps Architecture](images/ccp-mlops-arch.png)
+![Customer Churn Prediction MLOps Architecture](images/ccp-mlops-arch-on-k8s.png)
 
 ```text
 Customer Churn Dataset
