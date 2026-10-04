@@ -6,7 +6,7 @@ The project demonstrates the complete ML lifecycle: dataset generation and valid
 
 **Project repository:** https://github.com/zainul1114/customer-churn-kubeflow-mlflow
 
-**Architecture:** [Customer Churn MLOps Architecture](images/ccp-mlops-arch.png)
+**Architecture:** [Customer Churn MLOps Architecture](images/ccp-mlops-arch-on-k8s.png)
 
 ---
 
