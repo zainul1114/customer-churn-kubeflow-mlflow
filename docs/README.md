@@ -4,7 +4,7 @@ An end-to-end Machine Learning workflow built on **Kubeflow Community Distributi
 
 The project demonstrates how Kubernetes-native ML orchestration can be combined with experiment tracking, model artifacts, PostgreSQL metadata storage, and MinIO object storage.
 
-![CCP MLOps Archtecture](../images/ccp_mlops_arch.png)
+![CCP MLOps Archtecture](../images/ccp-mlops-arch.png)
 
 ## Project Objective
 
