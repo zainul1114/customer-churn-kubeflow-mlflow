@@ -47,55 +47,6 @@ The API transforms this record into the feature order expected by the model, sen
 
 ![Customer Churn Prediction MLOps Architecture](images/ccp-mlops-arch-on-k8s.png)
 
-```text
-Customer Churn Dataset
-        |
-        v
-Kubeflow Pipelines
-  |-- Dataset Creation
-  |-- Data Validation
-  |-- Preprocessing
-  |-- Model Training
-  |-- Model Evaluation
-        |
-        +---- Katib Hyperparameter Optimization
-        |
-        v
-MLflow Tracking
-   |                 |
-   v                 v
-PostgreSQL          MinIO
-Metadata            ML Artifacts / Models
-   |
-   v
-Kubeflow Model Registry
-   |
-   v
-KServe Model Serving
-   |
-   v
-FastAPI Prediction API
-   |
-   +---- Prometheus ---- Grafana
-
-
-Developer --> GitHub --> GitHub Actions
-                           |-- pytest
-                           |-- Docker build
-                           |-- Push image to GHCR
-                                    |
-                                    v
-                              GitOps Repository
-                                    |
-                                    v
-                                 Argo CD
-                                    |
-                                    v
-                               Kubernetes
-```
-
-**Storage distinction:** KCD's Kubeflow Pipelines artifact storage in this environment uses the KCD-provided SeaweedFS integration. The separately deployed MinIO instance stores MLflow artifacts and model files. These are distinct storage systems.
-
 
 # Tools and Technologies
 
