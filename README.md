@@ -96,6 +96,312 @@ Developer --> GitHub --> GitHub Actions
 
 **Storage distinction:** KCD's Kubeflow Pipelines artifact storage in this environment uses the KCD-provided SeaweedFS integration. The separately deployed MinIO instance stores MLflow artifacts and model files. These are distinct storage systems.
 
+
+## Tools and Technologies
+
+<table>
+  <thead>
+    <tr>
+      <th>Tool</th>
+      <th>Components</th>
+      <th>Version</th>
+      <th>Purpose</th>
+    </tr>
+  </thead>
+  <tbody>
+
+    <!-- Kubernetes -->
+    <tr>
+      <td><strong>Kubernetes</strong></td>
+      <td>Kubernetes Cluster</td>
+      <td>1.34+</td>
+      <td>
+        Provides the container orchestration platform for running,
+        scheduling, networking, scaling, and managing all MLOps workloads.
+      </td>
+    </tr>
+
+    <!-- Kubeflow -->
+    <tr>
+      <td rowspan="5"><strong>Kubeflow</strong></td>
+      <td>Kubeflow Community Distribution (KCD)</td>
+      <td>26.03.1</td>
+      <td>
+        Provides the Kubernetes-native ML platform and integrates
+        workflow orchestration, hyperparameter optimization,
+        model serving, and model lifecycle capabilities.
+      </td>
+    </tr>
+
+    <tr>
+      <td>Kubeflow Pipelines (KFP)</td>
+      <td>2.16.0</td>
+      <td>
+        Provides container-based orchestration for building,
+        executing, and managing reproducible ML workflows on Kubernetes.
+      </td>
+    </tr>
+
+    <tr>
+      <td>Katib</td>
+      <td>0.19.0</td>
+      <td>
+        Automates hyperparameter optimization by running multiple
+        training trials with different parameter combinations and
+        selecting the configuration that optimizes the target metric.
+      </td>
+    </tr>
+
+    <tr>
+      <td>Model Registry</td>
+      <td>0.3.7</td>
+      <td>
+        Provides model registration, versioning, metadata, and lifecycle
+        management for trained ML models before they are deployed for inference.
+      </td>
+    </tr>
+
+    <tr>
+      <td>KServe</td>
+      <td>0.18.0</td>
+      <td>
+        Provides Kubernetes-native model serving and inference endpoints
+        for deploying the trained Customer Churn model.
+      </td>
+    </tr>
+
+    <!-- MLflow -->
+    <tr>
+      <td rowspan="2"><strong>MLflow</strong></td>
+      <td>MLflow Tracking Server</td>
+      <td>3.16.1</td>
+      <td>
+        Tracks ML experiments, runs, parameters, metrics, model information,
+        and artifacts throughout the training and evaluation lifecycle.
+      </td>
+    </tr>
+
+    <tr>
+      <td>MLflow Model Logging</td>
+      <td>3.16.1</td>
+      <td>
+        Logs the trained Scikit-learn model and associated model metadata
+        as part of the MLflow run.
+      </td>
+    </tr>
+
+    <!-- PostgreSQL -->
+    <tr>
+      <td><strong>PostgreSQL</strong></td>
+      <td>MLflow Backend Store</td>
+      <td>15</td>
+      <td>
+        Stores MLflow tracking metadata including experiments, runs,
+        parameters, metrics, and model-related metadata.
+      </td>
+    </tr>
+
+    <!-- MinIO -->
+    <tr>
+      <td><strong>MinIO</strong></td>
+      <td>S3-compatible Object Storage</td>
+      <td>Latest</td>
+      <td>
+        Stores MLflow artifacts and model files in S3-compatible
+        object storage.
+      </td>
+    </tr>
+
+    <!-- Scikit-learn -->
+    <tr>
+      <td><strong>Scikit-learn</strong></td>
+      <td>RandomForestClassifier</td>
+      <td>1.5.2</td>
+      <td>
+        Provides the machine learning algorithm used to train
+        the Customer Churn classification model.
+      </td>
+    </tr>
+
+    <!-- Python -->
+    <tr>
+      <td><strong>Python</strong></td>
+      <td>Python Runtime</td>
+      <td>3.11</td>
+      <td>
+        Provides the programming runtime used for pipeline components,
+        model training, API development, and supporting scripts.
+      </td>
+    </tr>
+
+    <!-- Model Serialization -->
+    <tr>
+      <td rowspan="2"><strong>Model Serialization</strong></td>
+      <td>skops</td>
+      <td>0.16.0</td>
+      <td>
+        Used to securely serialize and load the Scikit-learn model
+        for MLflow model logging.
+      </td>
+    </tr>
+
+    <tr>
+      <td>joblib</td>
+      <td>1.4.2</td>
+      <td>
+        Used to create the KServe-compatible <code>model.joblib</code>
+        artifact for the Scikit-learn serving runtime.
+      </td>
+    </tr>
+
+    <!-- Object Storage SDK -->
+    <tr>
+      <td><strong>Object Storage SDK</strong></td>
+      <td>boto3 / botocore</td>
+      <td>Project dependency</td>
+      <td>
+        Provides S3-compatible programmatic access to MinIO for
+        uploading and downloading ML artifacts and models.
+      </td>
+    </tr>
+
+    <!-- FastAPI -->
+    <tr>
+      <td rowspan="2"><strong>FastAPI</strong></td>
+      <td>FastAPI</td>
+      <td>0.115.6</td>
+      <td>
+        Provides the application-facing prediction API, request validation,
+        feature transformation, KServe integration, health checks,
+        and model readiness checks.
+      </td>
+    </tr>
+
+    <tr>
+      <td>Uvicorn</td>
+      <td>0.34.0</td>
+      <td>
+        Provides the ASGI application server used to run the FastAPI
+        Customer Churn Prediction API.
+      </td>
+    </tr>
+
+    <!-- Prometheus -->
+    <tr>
+      <td rowspan="2"><strong>Prometheus</strong></td>
+      <td>Prometheus Server</td>
+      <td>3.15.0</td>
+      <td>
+        Collects time-series metrics from the Customer Churn API
+        and Kubernetes workloads for monitoring and observability.
+      </td>
+    </tr>
+
+    <tr>
+      <td>ServiceMonitor</td>
+      <td>Prometheus Operator</td>
+      <td>
+        Defines how Prometheus discovers and scrapes the Customer Churn
+        API <code>/metrics</code> endpoint.
+      </td>
+    </tr>
+
+    <!-- Grafana -->
+    <tr>
+      <td><strong>Grafana</strong></td>
+      <td>Grafana Dashboard</td>
+      <td>Project deployment</td>
+      <td>
+        Provides dashboards for visualizing prediction counts,
+        API request rates, prediction latency, errors, and
+        KServe model readiness.
+      </td>
+    </tr>
+
+    <!-- GitHub -->
+    <tr>
+      <td><strong>GitHub</strong></td>
+      <td>Git Repository</td>
+      <td>GitHub</td>
+      <td>
+        Stores application source code, ML pipelines, Kubernetes manifests,
+        GitOps configuration, documentation, and project history.
+      </td>
+    </tr>
+
+    <!-- GitHub Actions -->
+    <tr>
+      <td><strong>GitHub Actions</strong></td>
+      <td>CI Workflow</td>
+      <td>GitHub Actions</td>
+      <td>
+        Automates Python dependency installation, pytest execution,
+        Docker image building, and publishing of the API image to GHCR.
+      </td>
+    </tr>
+
+    <!-- GHCR -->
+    <tr>
+      <td><strong>GHCR</strong></td>
+      <td>GitHub Container Registry</td>
+      <td>GitHub Service</td>
+      <td>
+        Stores versioned Customer Churn API container images produced
+        by the CI pipeline.
+      </td>
+    </tr>
+
+    <!-- Docker -->
+    <tr>
+      <td><strong>Docker</strong></td>
+      <td>Docker Engine / Dockerfile</td>
+      <td>Project deployment</td>
+      <td>
+        Packages the FastAPI application, ML components, and supporting
+        applications into reproducible container images.
+      </td>
+    </tr>
+
+    <!-- Kustomize -->
+    <tr>
+      <td><strong>Kustomize</strong></td>
+      <td>Base + Dev Overlay</td>
+      <td>Kustomize</td>
+      <td>
+        Manages Kubernetes manifests using reusable base resources
+        and environment-specific overlays, including container
+        image versioning.
+      </td>
+    </tr>
+
+    <!-- Argo CD -->
+    <tr>
+      <td><strong>Argo CD</strong></td>
+      <td>Argo CD Application</td>
+      <td>Project deployment</td>
+      <td>
+        Implements GitOps continuous delivery by monitoring the Git
+        repository and reconciling the desired Kubernetes state
+        with the actual cluster state.
+      </td>
+    </tr>
+
+    <!-- GitOps -->
+    <tr>
+      <td><strong>GitOps</strong></td>
+      <td>GitOps Repository</td>
+      <td>Project architecture</td>
+      <td>
+        Maintains the desired Kubernetes deployment configuration
+        in Git and provides an auditable, version-controlled
+        deployment workflow.
+      </td>
+    </tr>
+
+  </tbody>
+</table>
+
+
 ## Tools and Technologies
 
 | Area | Technology / Version |
