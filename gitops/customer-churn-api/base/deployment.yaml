@@ -24,8 +24,9 @@ spec:
 
           env:
             - name: KSERVE_URL
-              value: "http://customer-churn-randomforest-predictor-00002-private:8012"
-
+              value: "http://knative-local-gateway.istio-system.svc.cluster.local:80"
+            - name: KSERVE_HOST
+              value: "customer-churn-randomforest-predictor.kubeflow-user-example-com.example.com"
             - name: MODEL_NAME
               value: "customer-churn-randomforest"
 

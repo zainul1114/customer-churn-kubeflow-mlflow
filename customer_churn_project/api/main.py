@@ -1,32 +1,25 @@
-from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import Response
-from pydantic import BaseModel, Field
-from prometheus_client import (
-    Counter,
-    Histogram,
-    Gauge,
-    generate_latest,
-    CONTENT_TYPE_LATEST,
-)
-import requests
 import os
 import time
 
+import requests
+from fastapi import FastAPI, HTTPException
+from pydantic import BaseModel, Field
+from prometheus_client import Counter, Histogram, Gauge, make_asgi_app
+from starlette.middleware.base import BaseHTTPMiddleware
 
-app = FastAPI(
-    title="Customer Churn Prediction API",
-    description="FastAPI gateway for the Kubeflow/KServe Customer Churn model",
-    version="1.1.0",
-)
 
-
-# =========================================================
+# ============================================================
 # Configuration
-# =========================================================
+# ============================================================
 
 KSERVE_URL = os.getenv(
     "KSERVE_URL",
-    "http://customer-churn-randomforest-predictor-00002-private:8012",
+    "http://knative-local-gateway.istio-system.svc.cluster.local:80",
+)
+
+KSERVE_HOST = os.getenv(
+    "KSERVE_HOST",
+    "customer-churn-randomforest-predictor.kubeflow-user-example-com.example.com",
 )
 
 MODEL_NAME = os.getenv(
@@ -35,108 +28,223 @@ MODEL_NAME = os.getenv(
 )
 
 
-# =========================================================
-# Prometheus Metrics
-# =========================================================
+# ============================================================
+# FastAPI
+# ============================================================
 
-API_REQUESTS = Counter(
+app = FastAPI(
+    title="Customer Churn Prediction API",
+    version="2.0.0",
+    description="FastAPI prediction service backed by KServe",
+)
+
+
+# ============================================================
+# Prometheus metrics
+# ============================================================
+
+REQUEST_COUNT = Counter(
     "customer_churn_api_requests_total",
-    "Total HTTP requests received by Customer Churn API",
+    "Total API requests",
     ["method", "endpoint", "status"],
 )
 
-
-PREDICTIONS_TOTAL = Counter(
+PREDICTION_COUNT = Counter(
     "customer_churn_predictions_total",
-    "Total customer churn predictions",
+    "Total predictions",
     ["prediction", "label"],
 )
 
-
-API_ERRORS = Counter(
+ERROR_COUNT = Counter(
     "customer_churn_api_errors_total",
-    "Total Customer Churn API errors",
-    ["endpoint", "error_type"],
+    "Total API errors",
+    ["endpoint"],
 )
-
 
 PREDICTION_LATENCY = Histogram(
     "customer_churn_prediction_latency_seconds",
-    "Prediction request latency in seconds",
+    "Prediction request latency",
 )
-
 
 KSERVE_READY = Gauge(
     "customer_churn_kserve_ready",
-    "KServe model readiness: 1=ready, 0=not ready",
-    ["model"],
+    "KServe model readiness",
 )
 
 
-# =========================================================
+# ============================================================
 # Request model
-# =========================================================
+# ============================================================
 
-class CustomerData(BaseModel):
-
-    age: int = Field(..., ge=18)
-
+class CustomerRequest(BaseModel):
+    age: int = Field(..., ge=18, le=100)
     tenure: int = Field(..., ge=0)
-
     monthly_charges: float = Field(..., ge=0)
-
     total_charges: float = Field(..., ge=0)
-
+    contract_type: str
     support_calls: int = Field(..., ge=0)
 
-    contract_type: str
+
+# ============================================================
+# Feature transformation
+# IMPORTANT:
+# Preserve the existing model feature order:
+#
+# age
+# tenure
+# monthly_charges
+# total_charges
+# support_calls
+# contract_type_month_to_month
+# contract_type_one_year
+# contract_type_two_year
+# ============================================================
+
+def transform_features(request: CustomerRequest):
+
+    contract = request.contract_type.strip().lower()
+
+    if contract == "month-to-month":
+        contract_features = [1, 0, 0]
+
+    elif contract == "one year":
+        contract_features = [0, 1, 0]
+
+    elif contract == "two year":
+        contract_features = [0, 0, 1]
+
+    else:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "Invalid contract_type. "
+                "Must be one of: Month-to-month, One year, Two year"
+            ),
+        )
+
+    return [
+        request.age,
+        request.tenure,
+        request.monthly_charges,
+        request.total_charges,
+        request.support_calls,
+        *contract_features,
+    ]
 
 
-# =========================================================
-# HTTP Request Metrics Middleware
-# =========================================================
+# ============================================================
+# KServe headers
+# ============================================================
 
-@app.middleware("http")
-async def metrics_middleware(request: Request, call_next):
+def kserve_headers():
 
-    start_time = time.time()
+    return {
+        "Content-Type": "application/json",
+
+        # Stable Knative/KServe routing hostname.
+        "Host": KSERVE_HOST,
+
+        # Required for the cluster-local Knative route.
+        "K-Network-Hash": "override",
+    }
+
+
+# ============================================================
+# KServe readiness
+# ============================================================
+
+def kserve_ready():
+
+    url = f"{KSERVE_URL}/v2/models/{MODEL_NAME}/ready"
 
     try:
 
-        response = await call_next(request)
+        response = requests.get(
+            url,
+            headers=kserve_headers(),
+            timeout=10,
+        )
 
-        status = str(response.status_code)
+        if response.status_code == 200:
 
-        API_REQUESTS.labels(
-            method=request.method,
-            endpoint=request.url.path,
-            status=status,
-        ).inc()
+            KSERVE_READY.set(1)
 
-        return response
+            return response.json()
 
-    except Exception:
+        KSERVE_READY.set(0)
 
-        API_REQUESTS.labels(
-            method=request.method,
-            endpoint=request.url.path,
-            status="500",
-        ).inc()
+        return {
+            "ready": False,
+            "status_code": response.status_code,
+            "response": response.text,
+        }
 
-        raise
+    except requests.RequestException as exc:
 
-    finally:
+        KSERVE_READY.set(0)
 
-        elapsed = time.time() - start_time
-
-        if request.url.path == "/predict":
-
-            PREDICTION_LATENCY.observe(elapsed)
+        return {
+            "ready": False,
+            "error": str(exc),
+        }
 
 
-# =========================================================
+# ============================================================
+# Metrics middleware
+# ============================================================
+
+class MetricsMiddleware(BaseHTTPMiddleware):
+
+    async def dispatch(self, request, call_next):
+
+        start_time = time.time()
+
+        try:
+
+            response = await call_next(request)
+
+            REQUEST_COUNT.labels(
+                method=request.method,
+                endpoint=request.url.path,
+                status=str(response.status_code),
+            ).inc()
+
+            return response
+
+        except Exception:
+
+            ERROR_COUNT.labels(
+                endpoint=request.url.path
+            ).inc()
+
+            REQUEST_COUNT.labels(
+                method=request.method,
+                endpoint=request.url.path,
+                status="500",
+            ).inc()
+
+            raise
+
+        finally:
+
+            if request.url.path == "/predict":
+
+                PREDICTION_LATENCY.observe(
+                    time.time() - start_time
+                )
+
+
+app.add_middleware(MetricsMiddleware)
+
+app.mount(
+    "/metrics",
+    make_asgi_app(),
+)
+
+
+# ============================================================
 # Health
-# =========================================================
+# ============================================================
 
 @app.get("/health")
 def health():
@@ -147,130 +255,30 @@ def health():
     }
 
 
-# =========================================================
-# Prometheus Metrics
-# =========================================================
-
-@app.get("/metrics")
-def metrics():
-
-    return Response(
-        generate_latest(),
-        media_type=CONTENT_TYPE_LATEST,
-    )
-
-
-# =========================================================
-# KServe readiness
-# =========================================================
+# ============================================================
+# Model readiness
+# ============================================================
 
 @app.get("/model/ready")
 def model_ready():
 
-    url = (
-        f"{KSERVE_URL}"
-        f"/v2/models/{MODEL_NAME}/ready"
-    )
+    result = kserve_ready()
 
-    try:
-
-        response = requests.get(
-            url,
-            timeout=5,
-        )
-
-        if response.status_code == 200:
-
-            KSERVE_READY.labels(
-                model=MODEL_NAME
-            ).set(1)
-
-            return {
-                "model": MODEL_NAME,
-                "ready": True,
-                "kserve_response": response.json(),
-            }
-
-        KSERVE_READY.labels(
-            model=MODEL_NAME
-        ).set(0)
-
-        raise HTTPException(
-            status_code=503,
-            detail={
-                "model": MODEL_NAME,
-                "ready": False,
-            },
-        )
-
-    except requests.RequestException as exc:
-
-        KSERVE_READY.labels(
-            model=MODEL_NAME
-        ).set(0)
-
-        API_ERRORS.labels(
-            endpoint="/model/ready",
-            error_type="kserve_unavailable",
-        ).inc()
-
-        raise HTTPException(
-            status_code=503,
-            detail=f"KServe unavailable: {exc}",
-        )
-
-
-# =========================================================
-# Feature Transformation
-# =========================================================
-
-def transform_features(customer: CustomerData):
-
-    contract = customer.contract_type.strip()
-
-    contract_encoding = {
-
-        "Month-to-month": [1, 0, 0],
-
-        "One year": [0, 1, 0],
-
-        "Two year": [0, 0, 1],
+    return {
+        "model": MODEL_NAME,
+        "ready": result.get("ready", False),
+        "kserve_response": result,
     }
 
-    if contract not in contract_encoding:
 
-        API_ERRORS.labels(
-            endpoint="/predict",
-            error_type="invalid_contract_type",
-        ).inc()
-
-        raise HTTPException(
-            status_code=400,
-            detail=(
-                "Invalid contract_type. "
-                "Allowed values: Month-to-month, "
-                "One year, Two year"
-            ),
-        )
-
-    return [
-        customer.age,
-        customer.tenure,
-        customer.monthly_charges,
-        customer.total_charges,
-        customer.support_calls,
-        *contract_encoding[contract],
-    ]
-
-
-# =========================================================
+# ============================================================
 # Prediction
-# =========================================================
+# ============================================================
 
 @app.post("/predict")
-def predict(customer: CustomerData):
+def predict(request: CustomerRequest):
 
-    features = transform_features(customer)
+    features = transform_features(request)
 
     payload = {
         "instances": [
@@ -279,67 +287,102 @@ def predict(customer: CustomerData):
     }
 
     url = (
-        f"{KSERVE_URL}"
-        f"/v1/models/{MODEL_NAME}:predict"
+        f"{KSERVE_URL}/v1/models/"
+        f"{MODEL_NAME}:predict"
     )
+
+    start_time = time.time()
 
     try:
 
         response = requests.post(
             url,
             json=payload,
+            headers=kserve_headers(),
             timeout=30,
         )
 
-    except requests.RequestException as exc:
+        PREDICTION_LATENCY.observe(
+            time.time() - start_time
+        )
 
-        API_ERRORS.labels(
-            endpoint="/predict",
-            error_type="kserve_unavailable",
+        if response.status_code != 200:
+
+            ERROR_COUNT.labels(
+                endpoint="/predict"
+            ).inc()
+
+            raise HTTPException(
+                status_code=502,
+                detail={
+                    "message": "KServe prediction failed",
+                    "status_code": response.status_code,
+                    "response": response.text,
+                },
+            )
+
+        result = response.json()
+
+        predictions = result.get("predictions")
+
+        if not predictions:
+
+            ERROR_COUNT.labels(
+                endpoint="/predict"
+            ).inc()
+
+            raise HTTPException(
+                status_code=502,
+                detail="KServe returned no predictions",
+            )
+
+        prediction = int(predictions[0])
+
+        if prediction == 1:
+            label = "Churn"
+        else:
+            label = "No Churn"
+
+        PREDICTION_COUNT.labels(
+            prediction=str(prediction),
+            label=label,
         ).inc()
 
+        return {
+            "prediction": prediction,
+            "churn": prediction == 1,
+            "prediction_label": label,
+            "model": MODEL_NAME,
+            "features": features,
+        }
+
+    except HTTPException:
+        raise
+
+    except requests.RequestException as exc:
+
+        ERROR_COUNT.labels(
+            endpoint="/predict"
+        ).inc()
+
+        # Preserve existing API contract:
+        # KServe unavailable -> HTTP 503
         raise HTTPException(
             status_code=503,
             detail=f"KServe unavailable: {exc}",
         )
 
-    if response.status_code != 200:
 
-        API_ERRORS.labels(
-            endpoint="/predict",
-            error_type="kserve_prediction_error",
-        ).inc()
+# ============================================================
+# Root
+# ============================================================
 
-        raise HTTPException(
-            status_code=502,
-            detail={
-                "message": "KServe prediction failed",
-                "status_code": response.status_code,
-                "response": response.text,
-            },
-        )
-
-    result = response.json()
-
-    prediction = result["predictions"][0]
-
-    churn = bool(prediction)
-
-    label = (
-        "Churn"
-        if churn
-        else "No Churn"
-    )
-
-    PREDICTIONS_TOTAL.labels(
-        prediction=str(prediction),
-        label=label,
-    ).inc()
+@app.get("/")
+def root():
 
     return {
-        "prediction": int(prediction),
-        "churn": churn,
-        "prediction_label": label,
+        "service": "customer-churn-api",
+        "version": "2.0.0",
         "model": MODEL_NAME,
-        "features": features,
+        "kserve_host": KSERVE_HOST,
     }
